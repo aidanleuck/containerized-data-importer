@@ -50,7 +50,6 @@ import (
 	"kubevirt.io/containerized-data-importer/pkg/common"
 	dvc "kubevirt.io/containerized-data-importer/pkg/controller/datavolume"
 	certwatcher "kubevirt.io/containerized-data-importer/pkg/util/cert/watcher"
-	"kubevirt.io/containerized-data-importer/pkg/util/clientconfig"
 	cryptowatch "kubevirt.io/containerized-data-importer/pkg/util/tls-crypto-watch"
 	"kubevirt.io/containerized-data-importer/pkg/version/verflag"
 )
@@ -178,7 +177,12 @@ func main() {
 		klog.Fatalf("Unable to get kube config: %v\n", errors.WithStack(err))
 	}
 
-	clientconfig.ApplyRateLimits(cfg, kubeAPIQPS, kubeAPIBurst)
+	if kubeAPIQPS > 0 {
+		cfg.QPS = float32(kubeAPIQPS)
+	}
+	if kubeAPIBurst > 0 {
+		cfg.Burst = kubeAPIBurst
+	}
 
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {

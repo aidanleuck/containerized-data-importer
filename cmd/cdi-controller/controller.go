@@ -30,6 +30,7 @@ import (
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
@@ -56,7 +57,6 @@ import (
 	"kubevirt.io/containerized-data-importer/pkg/util/cert"
 	"kubevirt.io/containerized-data-importer/pkg/util/cert/fetcher"
 	"kubevirt.io/containerized-data-importer/pkg/util/cert/generator"
-	"kubevirt.io/containerized-data-importer/pkg/util/clientconfig"
 	cryptowatch "kubevirt.io/containerized-data-importer/pkg/util/tls-crypto-watch"
 )
 
@@ -106,6 +106,16 @@ type ControllerEnvs struct {
 // are required by the controller and will cause it to fail if not defined.
 // Note: kubeconfig hierarchy is 1) -kubeconfig flag, 2) $KUBECONFIG exported var. If neither is
 // specified we do an in-cluster config. For testing it's easiest to export KUBECONFIG.
+// applyRateLimits overrides the client-side rate limits of cfg; zero values keep the client library defaults.
+func applyRateLimits(cfg *rest.Config) {
+	if kubeAPIQPS > 0 {
+		cfg.QPS = float32(kubeAPIQPS)
+	}
+	if kubeAPIBurst > 0 {
+		cfg.Burst = kubeAPIBurst
+	}
+}
+
 func init() {
 	// flags
 	flag.StringVar(&kubeURL, "server", "", "(Optional) URL address of a remote api server.  Do not set for local clusters.")
@@ -180,7 +190,7 @@ func start() {
 		klog.Fatalf("Unable to get kube config: %v\n", errors.WithStack(err))
 	}
 
-	clientconfig.ApplyRateLimits(cfg, kubeAPIQPS, kubeAPIBurst)
+	applyRateLimits(cfg)
 
 	k8sClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
@@ -244,7 +254,7 @@ func start() {
 	}
 
 	mgrCfg := config.GetConfigOrDie()
-	clientconfig.ApplyRateLimits(mgrCfg, kubeAPIQPS, kubeAPIBurst)
+	applyRateLimits(mgrCfg)
 	klog.Infof("Kubernetes API client rate limit: QPS=%v Burst=%d", mgrCfg.QPS, mgrCfg.Burst)
 
 	mgr, err := manager.New(mgrCfg, opts)
